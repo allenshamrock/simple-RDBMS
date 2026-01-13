@@ -1,0 +1,23 @@
+{
+  "rows": [
+    {
+      "name": "VICTOR WEEKS",
+      "email": "PACEDAXOZO@MAILINATOR.COM",
+      "phone": "+1 (764) 349-2737",
+      "address": "UT OFFICIIS SIMILIQU",
+      "company": "WASHINGTON AND BALDWIN CO",
+      "created_at": "2026-01-13",
+      "id": 11
+    },
+    {
+      "name": "KYLE MCCONNELL",
+      "email": "LEJI@MAILINATOR.COM",
+      "phone": "+1 (525) 199-1696",
+      "address": "LIBERO MOLESTIAE EST",
+      "company": "HATFIELD HOLLAND CO",
+      "created_at": "2026-01-13",
+      "id": 12
+    }
+  ],
+  "next_id": 14
+}

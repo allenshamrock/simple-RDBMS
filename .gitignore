@@ -1,1 +1,8 @@
 venv
+web_app/frontend/node_modules
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+.DS_Store

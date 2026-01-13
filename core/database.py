@@ -282,7 +282,18 @@ class Database:
     
     def execute_query(self, query: str) -> Any:
         """Execute a SQL-like query"""
-        from ..parser.sql_parser import parse_query
+        try:
+            # Try to import parser
+            from parser.sql_parser import parse_query
+        except ImportError:
+            # If that fails, add parent directory to path
+            import sys
+            import os
+            parser_path = os.path.join(os.path.dirname(__file__), '..', 'parser')
+            if parser_path not in sys.path:
+                sys.path.append(parser_path)
+            from sql_parser import parse_query
+        
         parsed_query = parse_query(query)
         return self.execute_parsed_query(parsed_query)
     

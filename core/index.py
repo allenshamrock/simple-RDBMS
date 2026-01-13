@@ -1,39 +1,43 @@
-from typing import Dict, Any, List, Set
-import bisect
+from typing import Dict, List, Any
 
 class IndexManager:
     def __init__(self):
-        self.index = {} 
-        self.sorted_keys = []  # For range queries
+        self.index = {}
     
-    def add(self, row_id: int, row: Dict[str, Any]):
+    def add(self, row_id: int, values: Dict[str, Any]):
         """Add a row to the index"""
-        for key, value in row.items():
-            if key not in self.index:
-                self.index[key] = {}
+        for column_name, value in values.items():
+            if column_name not in self.index:
+                self.index[column_name] = {}
             
-            value_key = str(value)
-            if value_key not in self.index[key]:
-                self.index[key][value_key] = set()
+            if value not in self.index[column_name]:
+                self.index[column_name][value] = []
             
-            self.index[key][value_key].add(row_id)
+            if row_id not in self.index[column_name][value]:
+                self.index[column_name][value].append(row_id)
     
-    def remove(self, row_id: int, row: Dict[str, Any]):
+    def remove(self, row_id: int, values: Dict[str, Any]):
         """Remove a row from the index"""
-        for key, value in row.items():
-            if key in self.index:
-                value_key = str(value)
-                if value_key in self.index[key]:
-                    self.index[key][value_key].discard(row_id)
+        for column_name, value in values.items():
+            if column_name in self.index and value in self.index[column_name]:
+                if row_id in self.index[column_name][value]:
+                    self.index[column_name][value].remove(row_id)
+                    
+                    # Clean up empty lists
+                    if not self.index[column_name][value]:
+                        del self.index[column_name][value]
     
-    def update(self, row_id: int, old_row: Dict[str, Any], new_row: Dict[str, Any]):
-        """Update index for a changed row"""
-        self.remove(row_id, old_row)
-        self.add(row_id, new_row)
+    def update(self, row_id: int, old_values: Dict[str, Any], new_values: Dict[str, Any]):
+        """Update index when a row changes"""
+        self.remove(row_id, old_values)
+        self.add(row_id, new_values)
     
-    def search(self, column: str, value: Any) -> Set[int]:
-        """Search for rows with specific value in column"""
-        if column in self.index:
-            value_key = str(value)
-            return self.index[column].get(value_key, set())
-        return set()
+    def search(self, column_name: str, value: Any) -> List[int]:
+        """Search for row IDs by column value"""
+        if column_name in self.index and value in self.index[column_name]:
+            return self.index[column_name][value].copy()
+        return []
+    
+    def clear(self):
+        """Clear the entire index"""
+        self.index = {}
