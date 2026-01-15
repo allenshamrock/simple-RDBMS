@@ -126,56 +126,33 @@ class Table:
         
         return row_id
     
-    def select(self, where_conditions: List[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """Select rows from the table with WHERE conditions"""
+    def select(self, where: Optional[Dict[str, Any]] = None, where_operator: str = '=') -> List[Dict[str, Any]]:
+        """Select rows from the table with WHERE clause"""
         results = []
         
         for row in self.data:
             match = True
-            
-            if where_conditions:
-                for condition in where_conditions:
-                    column = condition['column']
-                    operator = condition['operator']
-                    values = condition['values']
-                    
-                    if column not in row:
+            if where:
+                for key, value in where.items():
+                    if key not in row:
                         match = False
                         break
                     
-                    row_value = row[column]
+                    row_value = row[key]
                     
-                    if operator == '=':
-                        if row_value != values[0]:
+                    if where_operator == '=':
+                        if row_value != value:
                             match = False
                             break
-                    elif operator == 'LIKE':
-                        if values and values[0]:
-                            pattern = values[0]
+                    elif where_operator == 'LIKE':
+                        if isinstance(value, str) and isinstance(row_value, str):
                             # Convert SQL LIKE pattern to regex
-                            # % -> .*, _ -> .
-                            regex_pattern = pattern.replace('%', '.*').replace('_', '.')
-                            if not re.match(regex_pattern, str(row_value), re.IGNORECASE):
+                            pattern = value.replace('%', '.*').replace('_', '.')
+                            import re
+                            if not re.search(pattern, row_value, re.IGNORECASE):
                                 match = False
                                 break
-                    elif operator == '!=' or operator == '<>':
-                        if row_value == values[0]:
-                            match = False
-                            break
-                    elif operator == '<':
-                        if not (row_value < values[0]):
-                            match = False
-                            break
-                    elif operator == '>':
-                        if not (row_value > values[0]):
-                            match = False
-                            break
-                    elif operator == '<=':
-                        if not (row_value <= values[0]):
-                            match = False
-                            break
-                    elif operator == '>=':
-                        if not (row_value >= values[0]):
+                        else:
                             match = False
                             break
             
@@ -183,8 +160,8 @@ class Table:
                 results.append(row.copy())
         
         return results
-    
-    def update(self, set_values: Dict[str, Any], where: Optional[Dict[str, Any]] = None) -> int:
+
+    def update(self, set_values: Dict[str, Any], where: Optional[Dict[str, Any]] = None, where_operator: str = '=') -> int:
         """Update rows in the table"""
         updated_count = 0
         
@@ -192,9 +169,26 @@ class Table:
             match = True
             if where:
                 for key, value in where.items():
-                    if key not in row or row[key] != value:
+                    if key not in row:
                         match = False
                         break
+                    
+                    row_value = row[key]
+                    
+                    if where_operator == '=':
+                        if row_value != value:
+                            match = False
+                            break
+                    elif where_operator == 'LIKE':
+                        if isinstance(value, str) and isinstance(row_value, str):
+                            pattern = value.replace('%', '.*').replace('_', '.')
+                            import re
+                            if not re.search(pattern, row_value, re.IGNORECASE):
+                                match = False
+                                break
+                        else:
+                            match = False
+                            break
             
             if match:
                 # Validate new values
@@ -217,8 +211,8 @@ class Table:
             self.save_data()
         
         return updated_count
-    
-    def delete(self, where: Optional[Dict[str, Any]] = None) -> int:
+
+    def delete(self, where: Optional[Dict[str, Any]] = None, where_operator: str = '=') -> int:
         """Delete rows from the table"""
         deleted_indices = []
         
@@ -226,14 +220,31 @@ class Table:
             match = True
             if where:
                 for key, value in where.items():
-                    if key not in row or row[key] != value:
+                    if key not in row:
                         match = False
                         break
+                    
+                    row_value = row[key]
+                    
+                    if where_operator == '=':
+                        if row_value != value:
+                            match = False
+                            break
+                    elif where_operator == 'LIKE':
+                        if isinstance(value, str) and isinstance(row_value, str):
+                            pattern = value.replace('%', '.*').replace('_', '.')
+                            import re
+                            if not re.search(pattern, row_value, re.IGNORECASE):
+                                match = False
+                                break
+                        else:
+                            match = False
+                            break
             
             if match:
                 deleted_indices.append(i)
         
-        # Remove in reverse order to maintain indices
+        # Remove in reverse order
         for i in sorted(deleted_indices, reverse=True):
             old_row = self.data.pop(i)
             
@@ -245,6 +256,7 @@ class Table:
             self.save_data()
         
         return len(deleted_indices)
+    
     
     def create_index(self, column_name: str, index_name: Optional[str] = None):
         """Create an index on a column"""
@@ -324,10 +336,8 @@ class Database:
     def execute_query(self, query: str) -> Any:
         """Execute a SQL-like query"""
         try:
-            # Try to import parser
             from parser.sql_parser import parse_query
         except ImportError:
-            # If that fails, add parent directory to path
             import sys
             import os
             parser_path = os.path.join(os.path.dirname(__file__), '..', 'parser')
@@ -369,7 +379,9 @@ class Database:
             if not table:
                 raise ValueError(f"Table {parsed_query['table_name']} not found")
             
-            rows = table.select(parsed_query.get('where'))
+            # Get WHERE operator (default to '=')
+            where_operator = parsed_query.get('where_operator', '=')
+            rows = table.select(parsed_query.get('where'), where_operator)
             
             # Handle JOIN if specified
             if 'join' in parsed_query:
@@ -411,13 +423,21 @@ class Database:
             table = self.get_table(parsed_query['table_name'])
             if not table:
                 raise ValueError(f"Table {parsed_query['table_name']} not found")
-            return table.update(parsed_query['set_values'], parsed_query.get('where'))
+            
+            where_operator = parsed_query.get('where_operator', '=')
+            return table.update(
+                parsed_query['set_values'], 
+                parsed_query.get('where'), 
+                where_operator
+            )
         
         elif query_type == 'DELETE':
             table = self.get_table(parsed_query['table_name'])
             if not table:
                 raise ValueError(f"Table {parsed_query['table_name']} not found")
-            return table.delete(parsed_query.get('where'))
+            
+            where_operator = parsed_query.get('where_operator', '=')
+            return table.delete(parsed_query.get('where'), where_operator)
         
         elif query_type == 'CREATE_INDEX':
             table = self.get_table(parsed_query['table_name'])
