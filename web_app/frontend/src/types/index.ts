@@ -58,6 +58,7 @@ export interface QueryResult {
   rows_affected?: number;
   message?: string;
   error?: string;
+  result?:string
 }
 
 export interface SqlQuery {

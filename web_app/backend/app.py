@@ -252,10 +252,15 @@ def execute_sql():
             return jsonify({'success': False, 'error': 'No query provided'}), 400
         
         query = data['query'].strip()
-        print(f"Executing SQL query: {query}")
+        print(f"\n{'='*50}")
+        print(f"SQL EXECUTION STARTED")
+        print(f"Query: {query}")
+        print(f"{'='*50}")
         
         # Execute the query
         result = db.execute_query(query)
+        print(f"Raw result from db.execute_query(): {result}")
+        print(f"Result type: {type(result)}")
         
         # Store in history
         query_history.append({
@@ -269,35 +274,43 @@ def execute_sql():
         if len(query_history) > 50:
             query_history.pop(0)
         
+        response_data = {
+            'success': True,
+        }
+        
         if isinstance(result, list):
-            response_data = {
-                'success': True,
-                'data': result,
-                'rows_affected': len(result)
-            }
-        elif isinstance(result, dict) and 'rows' in result:
-            response_data = {
-                'success': True,
-                'data': result['rows'],
-                'rows_affected': len(result['rows'])
-            }
+            print(f"Result is a list with {len(result)} items")
+            response_data['data'] = result
+            response_data['rows_affected'] = len(result)
+        elif isinstance(result, dict):
+            print(f"Result is a dict with keys: {list(result.keys())}")
+            if 'rows' in result:
+                response_data['data'] = result['rows']
+                response_data['rows_affected'] = len(result['rows'])
+            else:
+                response_data['result'] = result
         elif isinstance(result, int):
-            response_data = {
-                'success': True,
-                'rows_affected': result,
-                'message': f'Query affected {result} row(s)'
-            }
+            print(f"Result is an int: {result}")
+            response_data['rows_affected'] = result
+            response_data['message'] = f'Query affected {result} row(s)'
         else:
-            response_data = {
-                'success': True,
-                'result': result,
-                'message': 'Query executed successfully'
-            }
+            print(f"Result is other type: {result}")
+            response_data['result'] = result
+        
+        print(f"Final response data: {response_data}")
+        print(f"{'='*50}")
+        print(f"SQL EXECUTION COMPLETED")
+        print(f"{'='*50}\n")
         
         return jsonify(response_data)
         
     except Exception as e:
-        print(f"SQL execution error: {e}")
+        print(f"\n{'='*50}")
+        print(f"SQL EXECUTION ERROR")
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
+        print(f"{'='*50}\n")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -432,7 +445,7 @@ def get_query_history():
     try:
         return jsonify({
             'success': True,
-            'data': query_history[-20:]  # Return last 20 queries
+            'data': query_history[-20:] 
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500

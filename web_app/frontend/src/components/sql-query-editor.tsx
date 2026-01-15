@@ -206,7 +206,7 @@ const SqlQueryEditor: React.FC<SqlQueryEditorProps> = ({ onQueryExecuted }) => {
         <div className="mt-6 border-t pt-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-800">
-              {result.success ? "✅ Query Results" : "❌ Query Error"}
+              {result.success ? " Query Results" : " Query Error"}
             </h3>
             {result.rows_affected !== undefined && (
               <span className="text-sm text-gray-600">

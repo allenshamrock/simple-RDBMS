@@ -4,23 +4,24 @@ from typing import Dict, Any, List
 class SQLParser:
     @staticmethod
     def parse_query(query: str) -> Dict[str, Any]:
-        query = query.strip().upper()
+        query = query.strip()
+        query_upper = query.upper()
         
-        if query.startswith('CREATE TABLE'):
+        if query_upper.startswith('CREATE TABLE'):
             return SQLParser._parse_create_table(query)
-        elif query.startswith('DROP TABLE'):
+        elif query_upper.startswith('DROP TABLE'):
             return SQLParser._parse_drop_table(query)
-        elif query.startswith('INSERT INTO'):
+        elif query_upper.startswith('INSERT INTO'):
             return SQLParser._parse_insert(query)
-        elif query.startswith('SELECT'):
+        elif query_upper.startswith('SELECT'):
             return SQLParser._parse_select(query)
-        elif query.startswith('UPDATE'):
+        elif query_upper.startswith('UPDATE'):
             return SQLParser._parse_update(query)
-        elif query.startswith('DELETE FROM'):
+        elif query_upper.startswith('DELETE FROM'):
             return SQLParser._parse_delete(query)
-        elif query.startswith('CREATE INDEX'):
+        elif query_upper.startswith('CREATE INDEX'):
             return SQLParser._parse_create_index(query)
-        elif query.startswith('DROP INDEX'):
+        elif query_upper.startswith('DROP INDEX'):
             return SQLParser._parse_drop_index(query)
         else:
             raise ValueError(f"Unsupported SQL query: {query}")
@@ -29,10 +30,10 @@ class SQLParser:
     def _parse_select(query: str) -> Dict[str, Any]:
         # Parse SELECT with optional WHERE and ORDER BY
         select_pattern = r'SELECT\s+(.*?)\s+FROM\s+(\w+)(?:\s+(WHERE\s+(.*?)))?(?:\s+(ORDER BY\s+(.*?)))?(?:\s+(JOIN\s+(.*?)\s+ON\s+(.*?)))?$'
-        match = re.search(select_pattern, query, re.IGNORECASE)
+        match = re.search(select_pattern, query, re.IGNORECASE | re.DOTALL)
         
         if not match:
-            raise ValueError("Invalid SELECT syntax")
+            raise ValueError(f"Invalid SELECT syntax: {query}")
         
         table_name = match.group(2).lower()
         where_clause = match.group(4)
@@ -44,23 +45,42 @@ class SQLParser:
             'type': 'SELECT',
             'table_name': table_name,
             'where': {},
+            'where_operator': '=',  # Default operator
             'order_by': None
         }
         
         if where_clause:
-            # Handle simple WHERE conditions (key=value)
-            where_parts = where_clause.split('=')
-            if len(where_parts) == 2:
-                key = where_parts[0].strip().lower()
-                value = where_parts[1].strip()
-                
-                # Remove quotes if present
-                if value.startswith("'") and value.endswith("'"):
-                    value = value[1:-1]
-                elif value.isdigit():
-                    value = int(value)
-                
-                parsed['where'][key] = value
+            where_clause = where_clause.strip()
+            
+            # Handle LIKE operator
+            if ' LIKE ' in where_clause.upper():
+                parts = re.split(r'\s+LIKE\s+', where_clause, 1, re.IGNORECASE)
+                if len(parts) == 2:
+                    key = parts[0].strip().lower()
+                    value = parts[1].strip()
+                    
+                    # Remove quotes if present
+                    if value.startswith("'") and value.endswith("'"):
+                        value = value[1:-1]
+                    
+                    parsed['where'][key] = value
+                    parsed['where_operator'] = 'LIKE'
+            
+            # Handle = operator
+            elif '=' in where_clause:
+                where_parts = where_clause.split('=', 1)
+                if len(where_parts) == 2:
+                    key = where_parts[0].strip().lower()
+                    value = where_parts[1].strip()
+                    
+                    # Remove quotes if present
+                    if value.startswith("'") and value.endswith("'"):
+                        value = value[1:-1]
+                    elif value.isdigit():
+                        value = int(value)
+                    
+                    parsed['where'][key] = value
+                    parsed['where_operator'] = '='
         
         if order_by_clause:
             parsed['order_by'] = order_by_clause.strip().lower()
@@ -74,7 +94,7 @@ class SQLParser:
                     right_col = on_parts[1].strip().split('.')[-1].lower()
                     
                     parsed['join'] = {
-                        'type': 'INNER',  # Simple implementation
+                        'type': 'INNER',
                         'table': join_table,
                         'on': [left_col, right_col]
                     }
@@ -97,7 +117,7 @@ class SQLParser:
     @staticmethod
     def _parse_insert(query: str) -> Dict[str, Any]:
         pattern = r'INSERT INTO (\w+)\s*\((.*?)\)\s*VALUES\s*\((.*)\)'
-        match = re.search(pattern, query, re.IGNORECASE)
+        match = re.search(pattern, query, re.IGNORECASE | re.DOTALL)
         
         if not match:
             raise ValueError("Invalid INSERT syntax")
@@ -150,7 +170,6 @@ class SQLParser:
     
     @staticmethod
     def _parse_update(query: str) -> Dict[str, Any]:
-        # Use a more robust UPDATE parser
         query_upper = query.upper()
         
         # Find WHERE clause
@@ -171,7 +190,7 @@ class SQLParser:
         table_name = update_match.group(1).lower()
         set_clause = update_match.group(2).strip()
         
-        # Parse SET clause more carefully
+        # Parse SET clause
         set_values = {}
         i = 0
         current_key = ""
@@ -193,15 +212,13 @@ class SQLParser:
                     in_quotes = True
                     current_value += char
                 elif in_quotes and char == "'":
-                    # Check for escaped quote
                     if i + 1 < len(set_clause) and set_clause[i + 1] == "'":
                         current_value += "''"
-                        i += 1  # Skip next quote
+                        i += 1
                     else:
                         in_quotes = False
                         current_value += char
                 elif not in_quotes and char == ',':
-                    # End of this key-value pair
                     set_values[current_key] = current_value.strip()
                     current_key = ""
                     current_value = ""
@@ -210,40 +227,57 @@ class SQLParser:
                     current_value += char
             i += 1
         
-        # Add the last key-value pair
         if current_key and current_value:
             set_values[current_key] = current_value.strip()
         
-        # Clean values (remove surrounding quotes but keep escaped ones)
+        # Clean values
         for key, value in set_values.items():
             if value.startswith("'") and value.endswith("'"):
-                value = value[1:-1]  # Remove quotes
-                # Keep escaped quotes as single quotes
+                value = value[1:-1]
                 value = value.replace("''", "'")
             set_values[key] = value
         
         # Parse WHERE clause
         where = {}
+        where_operator = '='
         if where_part:
-            where_match = re.match(r'WHERE\s+(.*?)\s*=\s*(.*)', where_part, re.IGNORECASE)
-            if where_match:
-                key = where_match.group(1).strip().lower()
-                value = where_match.group(2).strip()
-                
-                # Clean value
-                if value.startswith("'") and value.endswith("'"):
-                    value = value[1:-1]
-                    value = value.replace("''", "'")
-                elif value.isdigit():
-                    value = int(value)
-                
-                where[key] = value
+            where_clause = where_part[5:].strip()
+            
+            # Handle LIKE in WHERE
+            if ' LIKE ' in where_clause.upper():
+                parts = re.split(r'\s+LIKE\s+', where_clause, 1, re.IGNORECASE)
+                if len(parts) == 2:
+                    key = parts[0].strip().lower()
+                    value = parts[1].strip()
+                    
+                    if value.startswith("'") and value.endswith("'"):
+                        value = value[1:-1]
+                    
+                    where[key] = value
+                    where_operator = 'LIKE'
+            
+            # Handle = in WHERE
+            elif '=' in where_clause:
+                where_match = re.match(r'(.*?)\s*=\s*(.*)', where_clause, re.IGNORECASE)
+                if where_match:
+                    key = where_match.group(1).strip().lower()
+                    value = where_match.group(2).strip()
+                    
+                    if value.startswith("'") and value.endswith("'"):
+                        value = value[1:-1]
+                        value = value.replace("''", "'")
+                    elif value.isdigit():
+                        value = int(value)
+                    
+                    where[key] = value
+                    where_operator = '='
         
         return {
             'type': 'UPDATE',
             'table_name': table_name,
             'set_values': set_values,
-            'where': where if where else None
+            'where': where if where else None,
+            'where_operator': where_operator
         }
     
     @staticmethod
@@ -259,11 +293,9 @@ class SQLParser:
             table_part = query.strip()
             where_part = ""
         
-        # Remove "DELETE FROM" from table_part to get just the table name
-        # Case-insensitive removal
+        # Get table name
         table_part_lower = table_part.upper()
         if 'DELETE FROM' in table_part_lower:
-            # Find where "DELETE FROM" ends
             delete_from_index = table_part_lower.find('DELETE FROM') + len('DELETE FROM')
             table_name_part = table_part[delete_from_index:].strip()
         else:
@@ -272,16 +304,29 @@ class SQLParser:
         
         # Parse WHERE clause
         where = {}
+        where_operator = '='
         if where_part:
-            # Remove "WHERE" from the beginning
-            where_clause = where_part[5:].strip() 
+            where_clause = where_part[5:].strip()
             
-            if '=' in where_clause:
+            # Handle LIKE
+            if ' LIKE ' in where_clause.upper():
+                parts = re.split(r'\s+LIKE\s+', where_clause, 1, re.IGNORECASE)
+                if len(parts) == 2:
+                    key = parts[0].strip().lower()
+                    value = parts[1].strip()
+                    
+                    if value.startswith("'") and value.endswith("'"):
+                        value = value[1:-1]
+                    
+                    where[key] = value
+                    where_operator = 'LIKE'
+            
+            # Handle =
+            elif '=' in where_clause:
                 key, value = where_clause.split('=', 1)
                 key = key.strip().lower()
                 value = value.strip()
                 
-                # Clean value
                 if value.startswith("'") and value.endswith("'"):
                     value = value[1:-1]
                     value = value.replace("''", "'")
@@ -289,11 +334,13 @@ class SQLParser:
                     value = int(value)
                 
                 where[key] = value
+                where_operator = '='
         
         return {
             'type': 'DELETE',
             'table_name': table_name,
-            'where': where if where else None
+            'where': where if where else None,
+            'where_operator': where_operator
         }
     
     @staticmethod
@@ -324,6 +371,67 @@ class SQLParser:
             'index_name': match.group(1).lower(),
             'table_name': match.group(2).lower()
         }
+    
+    @staticmethod
+    def _parse_create_table(query: str) -> Dict[str, Any]:
+        pattern = r'CREATE TABLE (\w+)\s*\((.*)\)'
+        match = re.search(pattern, query, re.IGNORECASE | re.DOTALL)
+        
+        if not match:
+            raise ValueError("Invalid CREATE TABLE syntax")
+        
+        table_name = match.group(1).lower()
+        columns_text = match.group(2)
+        
+        columns = []
+        current = ''
+        paren_depth = 0
+        
+        for char in columns_text:
+            if char == '(':
+                paren_depth += 1
+            elif char == ')':
+                paren_depth -= 1
+            elif char == ',' and paren_depth == 0:
+                col_def = current.strip()
+                if col_def:
+                    columns.append(SQLParser._parse_column_definition(col_def))
+                current = ''
+                continue
+            current += char
+        
+        if current.strip():
+            columns.append(SQLParser._parse_column_definition(current.strip()))
+        
+        return {
+            'type': 'CREATE_TABLE',
+            'table_name': table_name,
+            'columns': columns
+        }
+    
+    @staticmethod
+    def _parse_column_definition(col_def: str) -> Dict[str, Any]:
+        col_def = col_def.strip()
+        parts = col_def.split()
+        
+        column = {
+            'name': parts[0].lower(),
+            'data_type': parts[1].upper() if len(parts) > 1 else 'TEXT',
+            'primary': False,
+            'unique': False,
+            'nullable': True
+        }
+        
+        col_def_upper = col_def.upper()
+        if 'PRIMARY KEY' in col_def_upper:
+            column['primary'] = True
+            column['nullable'] = False
+        if 'UNIQUE' in col_def_upper:
+            column['unique'] = True
+        if 'NOT NULL' in col_def_upper:
+            column['nullable'] = False
+        
+        return column
 
 def parse_query(query: str) -> Dict[str, Any]:
     return SQLParser.parse_query(query)

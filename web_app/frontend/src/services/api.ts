@@ -120,13 +120,56 @@ export const healthCheck = async (): Promise<ApiResponse> => {
 
 export const executeSqlQuery = async (query: string): Promise<QueryResult> => {
   try {
-    const response = await api.post<ApiResponse<QueryResult>>("/sql/execute", { query });
-    return response.data.data || { success: false, error: "No data returned" };
+    console.log("Sending SQL query:", query);
+    const response = await api.post<any>("/sql/execute", { query });
+    console.log("SQL API Response:", response.data);
+
+    const responseData = response.data;
+
+    if (!responseData.success) {
+      return {
+        success: false,
+        error: responseData.error || "Query execution failed",
+      };
+    }
+
+    const result: QueryResult = {
+      success: true,
+    };
+
+    if (responseData.data !== undefined) {
+      result.data = responseData.data;
+    }
+    if (responseData.rows_affected !== undefined) {
+      result.rows_affected = responseData.rows_affected;
+    }
+    if (responseData.message !== undefined) {
+      result.message = responseData.message;
+    }
+    if (responseData.result !== undefined) {
+      result.result = responseData.result;
+    }
+
+    console.log("Processed QueryResult:", result);
+    return result;
   } catch (error) {
-    const axiosError = error as AxiosError<ApiResponse>;
-    throw new Error(
-      axiosError.response?.data?.error || "Failed to execute SQL query"
-    );
+    console.error("SQL execution error:", error);
+    const axiosError = error as AxiosError<any>;
+
+    if (axiosError.response?.data) {
+      const errorData = axiosError.response.data;
+      return {
+        success: false,
+        error:
+          errorData.error || errorData.message || "Failed to execute SQL query",
+      };
+    }
+
+    return {
+      success: false,
+      error:
+        "Failed to execute SQL query. Please check if the backend is running.",
+    };
   }
 };
 
