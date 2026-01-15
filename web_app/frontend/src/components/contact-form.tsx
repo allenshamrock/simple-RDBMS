@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { createContact, updateContact } from "../services/api";
-import type { Contact, ContactFormProps } from "../types";
+import type {  ContactFormProps } from "../types";
 import { FaTimes } from "react-icons/fa";
 
 interface FormData {

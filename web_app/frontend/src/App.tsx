@@ -12,7 +12,7 @@ function App() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [_searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshCounter, setRefreshCounter] = useState(0);
   const [activeTab, setActiveTab] = useState<"contacts" | "sql" | "schema">(

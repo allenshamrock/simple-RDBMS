@@ -1,5 +1,5 @@
 import React from "react";
-import type { Contact, ContactListProps } from "../types";
+import type {ContactListProps } from "../types";
 import { deleteContact } from "../services/api";
 import { FaEdit, FaTrash } from "react-icons/fa";
 
