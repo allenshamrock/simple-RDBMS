@@ -11,7 +11,7 @@ from core.database import Database
 from parser.sql_parser import parse_query
 
 app = Flask(__name__)
-CORS(app)  
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # Initialize database
 db = Database("contact_manager")
