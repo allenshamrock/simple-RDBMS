@@ -126,17 +126,58 @@ class Table:
         
         return row_id
     
-    def select(self, where: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """Select rows from the table with optional WHERE clause"""
+    def select(self, where_conditions: List[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Select rows from the table with WHERE conditions"""
         results = []
         
-        for i, row in enumerate(self.data):
+        for row in self.data:
             match = True
-            if where:
-                for key, value in where.items():
-                    if key not in row or row[key] != value:
+            
+            if where_conditions:
+                for condition in where_conditions:
+                    column = condition['column']
+                    operator = condition['operator']
+                    values = condition['values']
+                    
+                    if column not in row:
                         match = False
                         break
+                    
+                    row_value = row[column]
+                    
+                    if operator == '=':
+                        if row_value != values[0]:
+                            match = False
+                            break
+                    elif operator == 'LIKE':
+                        if values and values[0]:
+                            pattern = values[0]
+                            # Convert SQL LIKE pattern to regex
+                            # % -> .*, _ -> .
+                            regex_pattern = pattern.replace('%', '.*').replace('_', '.')
+                            if not re.match(regex_pattern, str(row_value), re.IGNORECASE):
+                                match = False
+                                break
+                    elif operator == '!=' or operator == '<>':
+                        if row_value == values[0]:
+                            match = False
+                            break
+                    elif operator == '<':
+                        if not (row_value < values[0]):
+                            match = False
+                            break
+                    elif operator == '>':
+                        if not (row_value > values[0]):
+                            match = False
+                            break
+                    elif operator == '<=':
+                        if not (row_value <= values[0]):
+                            match = False
+                            break
+                    elif operator == '>=':
+                        if not (row_value >= values[0]):
+                            match = False
+                            break
             
             if match:
                 results.append(row.copy())

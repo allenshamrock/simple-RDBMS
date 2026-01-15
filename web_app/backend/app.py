@@ -11,7 +11,7 @@ from core.database import Database
 from parser.sql_parser import parse_query
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for React frontend
+CORS(app)  
 
 # Initialize database
 db = Database("contact_manager")
@@ -19,7 +19,6 @@ db = Database("contact_manager")
 def initialize_database():
     """Initialize database with required tables"""
     try:
-        # Create contacts table if it doesn't exist
         create_contacts_table = """
         CREATE TABLE contacts (
             id INTEGER PRIMARY KEY,
@@ -37,7 +36,6 @@ def initialize_database():
     except Exception as e:
         print(f"Database already initialized: {e}")
 
-# Initialize database on startup
 initialize_database()
 
 def safe_sql_value(value):
@@ -242,6 +240,202 @@ def delete_contact(contact_id):
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 5000
+
+query_history = []
+
+@app.route('/api/sql/execute', methods=['POST'])
+def execute_sql():
+    """Execute raw SQL query"""
+    try:
+        data = request.json
+        if not data or 'query' not in data:
+            return jsonify({'success': False, 'error': 'No query provided'}), 400
+        
+        query = data['query'].strip()
+        print(f"Executing SQL query: {query}")
+        
+        # Execute the query
+        result = db.execute_query(query)
+        
+        # Store in history
+        query_history.append({
+            'id': len(query_history) + 1,
+            'query': query,
+            'result': result,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        # Keep only last 50 queries
+        if len(query_history) > 50:
+            query_history.pop(0)
+        
+        if isinstance(result, list):
+            response_data = {
+                'success': True,
+                'data': result,
+                'rows_affected': len(result)
+            }
+        elif isinstance(result, dict) and 'rows' in result:
+            response_data = {
+                'success': True,
+                'data': result['rows'],
+                'rows_affected': len(result['rows'])
+            }
+        elif isinstance(result, int):
+            response_data = {
+                'success': True,
+                'rows_affected': result,
+                'message': f'Query affected {result} row(s)'
+            }
+        else:
+            response_data = {
+                'success': True,
+                'result': result,
+                'message': 'Query executed successfully'
+            }
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        print(f"SQL execution error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/sql/schema', methods=['GET'])
+@app.route('/api/sql/schema/<table_name>', methods=['GET'])
+def get_schema(table_name=None):
+    """Get database schema"""
+    try:
+        schema = []
+        
+        if table_name:
+            table = db.get_table(table_name.lower())
+            if not table:
+                return jsonify({'success': False, 'error': f'Table {table_name} not found'}), 404
+            
+            table_schema = {
+                'name': table.name,
+                'columns': [],
+                'indexes': []
+            }
+            
+            for column in table.columns.values():
+                table_schema['columns'].append({
+                    'name': column.name,
+                    'data_type': column.data_type,
+                    'is_primary': column.is_primary,
+                    'is_unique': column.is_unique,
+                    'nullable': column.nullable
+                })
+            
+            for index_name in table.indexes:
+                # Extract column name from index name
+                col_name = index_name.split('_')[-1] if '_' in index_name else 'unknown'
+                table_schema['indexes'].append({
+                    'name': index_name,
+                    'table_name': table.name,
+                    'column_name': col_name
+                })
+            
+            schema.append(table_schema)
+        else:
+            # Get all tables
+            for table_name, table in db.tables.items():
+                table_schema = {
+                    'name': table.name,
+                    'columns': [],
+                    'indexes': []
+                }
+                
+                for column in table.columns.values():
+                    table_schema['columns'].append({
+                        'name': column.name,
+                        'data_type': column.data_type,
+                        'is_primary': column.is_primary,
+                        'is_unique': column.is_unique,
+                        'nullable': column.nullable
+                    })
+                
+                for index_name in table.indexes:
+                    col_name = index_name.split('_')[-1] if '_' in index_name else 'unknown'
+                    table_schema['indexes'].append({
+                        'name': index_name,
+                        'table_name': table.name,
+                        'column_name': col_name
+                    })
+                
+                schema.append(table_schema)
+        
+        return jsonify({'success': True, 'data': schema})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/sql/index', methods=['POST'])
+def create_index_route():
+    """Create an index"""
+    try:
+        data = request.json
+        required_fields = ['table_name', 'column_name']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'success': False, 'error': f'{field} is required'}), 400
+        
+        table_name = data['table_name'].lower()
+        column_name = data['column_name'].lower()
+        index_name = data.get('index_name')
+        
+        table = db.get_table(table_name)
+        if not table:
+            return jsonify({'success': False, 'error': f'Table {table_name} not found'}), 404
+        
+        # Build CREATE INDEX query
+        if index_name:
+            query = f"CREATE INDEX {index_name} ON {table_name} ({column_name})"
+        else:
+            query = f"CREATE INDEX idx_{table_name}_{column_name} ON {table_name} ({column_name})"
+        
+        db.execute_query(query)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Index created on {table_name}.{column_name}'
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/sql/index/<table_name>/<index_name>', methods=['DELETE'])
+def drop_index_route(table_name, index_name):
+    """Drop an index"""
+    try:
+        table = db.get_table(table_name.lower())
+        if not table:
+            return jsonify({'success': False, 'error': f'Table {table_name} not found'}), 404
+        
+        query = f"DROP INDEX {index_name} ON {table_name}"
+        db.execute_query(query)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Index {index_name} dropped from {table_name}'
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/sql/history', methods=['GET'])
+def get_query_history():
+    """Get SQL query history"""
+    try:
+        return jsonify({
+            'success': True,
+            'data': query_history[-20:]  # Return last 20 queries
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/health', methods=['GET'])
 def health_check():

@@ -31,3 +31,38 @@ export interface ContactListProps {
 export interface SearchBarProps {
   onSearch: (query: string) => void;
 }
+
+export interface TableSchema {
+  name: string;
+  columns: ColumnSchema[];
+  indexes: IndexSchema[];
+}
+
+export interface ColumnSchema {
+  name: string;
+  data_type: string;
+  is_primary: boolean;
+  is_unique: boolean;
+  nullable: boolean;
+}
+
+export interface IndexSchema {
+  name: string;
+  table_name: string;
+  column_name: string;
+}
+
+export interface QueryResult {
+  success: boolean;
+  data?: any[];
+  rows_affected?: number;
+  message?: string;
+  error?: string;
+}
+
+export interface SqlQuery {
+  id?: number;
+  query: string;
+  result?: QueryResult;
+  timestamp: string;
+}

@@ -1,5 +1,5 @@
 import axios, { AxiosError } from "axios";
-import type { Contact, ApiResponse } from "../types";
+import type { Contact, ApiResponse,QueryResult,TableSchema,SqlQuery } from "../types";
 
 const API_BASE_URL = "http://localhost:5000/api";
 
@@ -114,5 +114,80 @@ export const healthCheck = async (): Promise<ApiResponse> => {
     return response.data;
   } catch (error) {
     throw new Error("API is not reachable");
+  }
+};
+
+
+export const executeSqlQuery = async (query: string): Promise<QueryResult> => {
+  try {
+    const response = await api.post<ApiResponse<QueryResult>>("/sql/execute", { query });
+    return response.data.data || { success: false, error: "No data returned" };
+  } catch (error) {
+    const axiosError = error as AxiosError<ApiResponse>;
+    throw new Error(
+      axiosError.response?.data?.error || "Failed to execute SQL query"
+    );
+  }
+};
+
+export const getTableSchema = async (tableName?: string): Promise<TableSchema[]> => {
+  try {
+    const url = tableName ? `/sql/schema/${tableName}` : "/sql/schema";
+    const response = await api.get<ApiResponse<TableSchema[]>>(url);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    } else {
+      throw new Error(response.data.error || "Failed to fetch schema");
+    }
+  } catch (error) {
+    const axiosError = error as AxiosError<ApiResponse>;
+    throw new Error(
+      axiosError.response?.data?.error || "Failed to fetch schema"
+    );
+  }
+};
+
+export const createIndex = async (
+  tableName: string,
+  columnName: string,
+  indexName?: string
+): Promise<ApiResponse> => {
+  try {
+    const response = await api.post<ApiResponse>("/sql/index", {
+      table_name: tableName,
+      column_name: columnName,
+      index_name: indexName
+    });
+    return response.data;
+  } catch (error) {
+    const axiosError = error as AxiosError<ApiResponse>;
+    throw new Error(
+      axiosError.response?.data?.error || "Failed to create index"
+    );
+  }
+};
+
+export const dropIndex = async (indexName: string, tableName: string): Promise<ApiResponse> => {
+  try {
+    const response = await api.delete<ApiResponse>(`/sql/index/${tableName}/${indexName}`);
+    return response.data;
+  } catch (error) {
+    const axiosError = error as AxiosError<ApiResponse>;
+    throw new Error(
+      axiosError.response?.data?.error || "Failed to drop index"
+    );
+  }
+};
+
+export const getQueryHistory = async (): Promise<SqlQuery[]> => {
+  try {
+    const response = await api.get<ApiResponse<SqlQuery[]>>("/sql/history");
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    return [];
+  } catch (error) {
+    console.error("Failed to fetch query history:", error);
+    return [];
   }
 };
