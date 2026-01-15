@@ -11,7 +11,19 @@ from core.database import Database
 from parser.sql_parser import parse_query
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+allowed_origins = [
+    "http://localhost:5173",  
+    "https://simple-rdbms-6.onrender.com/api", 
+    "https://*.vercel.app"  
+]
+
+CORS(app, resources={
+    r"/api/*": {
+        "origins": allowed_origins,
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
 # Initialize database
 db = Database("contact_manager")
