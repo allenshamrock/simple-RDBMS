@@ -13,7 +13,7 @@ from parser.sql_parser import parse_query
 app = Flask(__name__)
 allowed_origins = [
     "http://localhost:5173", 
-    "https://simple-rdbms.vercel.app/"
+    "https://simple-rdbms.vercel.app"
 ]
 
 CORS(app, resources={
